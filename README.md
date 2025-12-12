@@ -16,7 +16,7 @@
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/John2013/phone_book
+git clone https://github.com/John2013/phone_book.git
 cd phone-address-service
 ```
 
