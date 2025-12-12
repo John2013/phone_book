@@ -16,7 +16,7 @@
 
 1. Клонируйте репозиторий:
 ```bash
-git clone <repository-url>
+git clone https://github.com/John2013/phone_book
 cd phone-address-service
 ```
 
@@ -108,7 +108,7 @@ make docker-clean
 ```bash
 make install-dev
 # или
-uv sync
+uv sync --extra dev
 ```
 
 ### Запуск тестов
