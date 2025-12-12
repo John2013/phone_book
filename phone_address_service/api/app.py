@@ -19,6 +19,7 @@ from phone_address_service.models.schemas import (
 )
 from phone_address_service.services.phone_address_service import PhoneAddressService
 from phone_address_service.repositories.redis_repository import RedisPhoneAddressRepository
+from phone_address_service.repositories.connection import redis_manager
 
 logger = logging.getLogger(__name__)
 logging_service = LoggingService(__name__)
@@ -35,6 +36,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         operation="service_startup"
     )
     
+    # Initialize Redis connection and log startup status
+    try:
+        await redis_manager.initialize()
+        logging_service.log_operation(
+            "info",
+            "Redis connection established successfully",
+            operation="redis_startup",
+            redis_host=redis_manager._pool.connection_kwargs.get('host') if redis_manager._pool else 'unknown',
+            redis_port=redis_manager._pool.connection_kwargs.get('port') if redis_manager._pool else 'unknown'
+        )
+    except Exception as e:
+        logging_service.log_error(
+            "Failed to establish Redis connection during startup",
+            e,
+            operation="redis_startup"
+        )
+        # Don't fail startup - let health check handle Redis availability
+    
     yield
     
     # Shutdown
@@ -43,6 +62,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "Phone Address Service shutting down...",
         operation="service_shutdown"
     )
+    
+    # Close Redis connection
+    try:
+        await redis_manager.close()
+        logging_service.log_operation(
+            "info",
+            "Redis connection closed successfully",
+            operation="redis_shutdown"
+        )
+    except Exception as e:
+        logging_service.log_error(
+            "Error closing Redis connection during shutdown",
+            e,
+            operation="redis_shutdown"
+        )
 
 
 # Dependency injection
@@ -83,15 +117,37 @@ def create_app() -> FastAPI:
     # Health check endpoint
     @app.get("/health", response_model=HealthCheckResponse)
     async def health_check():
-        """Basic health check endpoint."""
+        """Health check endpoint with Redis connectivity check."""
         logging_service.log_operation(
             "info",
             "Health check requested",
             operation="health_check"
         )
+        
+        # Check Redis connectivity
+        redis_connected = await redis_manager.health_check()
+        
+        # Determine overall service status
+        if redis_connected:
+            status = "healthy"
+            logging_service.log_operation(
+                "info",
+                "Health check passed - all systems operational",
+                operation="health_check",
+                redis_connected=redis_connected
+            )
+        else:
+            status = "degraded"
+            logging_service.log_operation(
+                "warning",
+                "Health check shows degraded status - Redis unavailable",
+                operation="health_check",
+                redis_connected=redis_connected
+            )
+        
         return HealthCheckResponse(
-            status="healthy",
-            redis_connected=True  # TODO: Add actual Redis health check
+            status=status,
+            redis_connected=redis_connected
         )
     
     # Phone address endpoints
