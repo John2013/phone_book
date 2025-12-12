@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean run docker-up docker-down
+.PHONY: help install install-dev test test-cov lint format clean run docker-build docker-up docker-down docker-logs docker-test docker-dev docker-prod docker-clean
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -42,3 +42,18 @@ docker-down: ## Stop services with Docker Compose
 
 docker-logs: ## View Docker Compose logs
 	docker-compose logs -f
+docker-build: ## Build Docker image
+	docker build -t phone-address-service .
+
+docker-test: ## Run integration tests with Docker
+	docker-compose -f docker-compose.yml -f docker-compose.test.yml up --build --abort-on-container-exit
+
+docker-dev: ## Start development environment
+	docker-compose --profile dev up --build
+
+docker-prod: ## Start production environment
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+docker-clean: ## Clean Docker resources
+	docker-compose down -v
+	docker system prune -f

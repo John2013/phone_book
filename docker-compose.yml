@@ -3,32 +3,76 @@ version: '3.8'
 services:
   redis:
     image: redis:7-alpine
+    container_name: phone-address-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - phone-address-network
 
   app:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: phone-address-service
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - API_DEBUG=true
-      - LOG_LEVEL=DEBUG
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_DEBUG=${API_DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - REDIS_CONNECTION_TIMEOUT=${REDIS_CONNECTION_TIMEOUT:-5}
+      - REDIS_SOCKET_TIMEOUT=${REDIS_SOCKET_TIMEOUT:-5}
+      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-10}
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - phone-address-network
+    volumes:
+      - app_logs:/app/logs
+
+  # Development override - mount source code for hot reload
+  app-dev:
+    extends: app
+    container_name: phone-address-service-dev
+    environment:
+      - API_DEBUG=true
+      - LOG_LEVEL=DEBUG
     volumes:
       - .:/app
+      - app_logs:/app/logs
     command: uv run python main.py
+    profiles:
+      - dev
 
 volumes:
   redis_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  phone-address-network:
+    driver: bridge

@@ -56,6 +56,51 @@ make docker-up
 docker-compose up -d
 ```
 
+## Docker
+
+### Сборка образа
+
+```bash
+make docker-build
+# или
+docker build -t phone-address-service .
+```
+
+### Среды развертывания
+
+#### Разработка
+```bash
+make docker-dev
+# или
+docker-compose --profile dev up --build
+```
+
+#### Продакшн
+```bash
+make docker-prod
+# или
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+### Конфигурация окружений
+
+- `.env.development` - настройки для разработки
+- `.env.production` - настройки для продакшна
+- `docker-compose.prod.yml` - продакшн конфигурация с ограничениями ресурсов
+
+### Полезные команды
+
+```bash
+# Просмотр логов
+make docker-logs
+
+# Интеграционные тесты
+make docker-test
+
+# Очистка Docker ресурсов
+make docker-clean
+```
+
 ## Разработка
 
 ### Установка зависимостей для разработки

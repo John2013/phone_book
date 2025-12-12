@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Phone Address Service
+# Test Dockerfile for Phone Address Service
 
 # Build stage
 FROM python:3.14-slim as builder
@@ -17,10 +17,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install dependencies
-RUN uv sync --frozen --no-cache --no-dev
+# Install dependencies including dev dependencies for testing
+RUN uv sync --frozen --no-cache
 
-# Production stage
+# Test stage
 FROM python:3.14-slim
 
 # Install runtime dependencies
@@ -40,8 +40,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # Copy virtual environment from builder
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
-# Copy application code
+# Copy application code and tests
 COPY --chown=appuser:appuser phone_address_service/ ./phone_address_service/
+COPY --chown=appuser:appuser tests/ ./tests/
 COPY --chown=appuser:appuser main.py ./
 COPY --chown=appuser:appuser pyproject.toml ./
 
@@ -55,19 +56,15 @@ USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# Environment variables for production
+# Environment variables for testing
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
 ENV API_DEBUG=false
 ENV LOG_LEVEL=INFO
 ENV LOG_FORMAT=json
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
 # Expose port
 EXPOSE 8000
 
-# Run the application
+# Default command runs the application
 CMD ["python", "main.py"]

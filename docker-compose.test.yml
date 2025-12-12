@@ -1,0 +1,72 @@
+version: '3.8'
+
+# Test configuration for integration tests
+services:
+  redis-test:
+    image: redis:7-alpine
+    container_name: phone-address-redis-test
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly no --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - test-network
+
+  app-test:
+    build: 
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: phone-address-service-test
+    ports:
+      - "8001:8000"
+    environment:
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_DEBUG=false
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    depends_on:
+      redis-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  test-runner:
+    build: 
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: phone-address-test-runner
+    environment:
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - API_HOST=app-test
+      - API_PORT=8000
+    depends_on:
+      app-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: >
+      sh -c "
+        echo 'Starting integration tests...' &&
+        uv run pytest tests/test_integration_docker.py -v --tb=short
+      "
+
+networks:
+  test-network:
+    driver: bridge
