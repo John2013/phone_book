@@ -8,7 +8,7 @@ install: ## Install production dependencies
 	uv sync --no-dev
 
 install-dev: ## Install development dependencies
-	uv sync
+	uv sync --extra dev
 
 test: ## Run tests
 	uv run pytest
