@@ -11,8 +11,10 @@ from redis.asyncio import Redis
 from phone_address_service.models.schemas import PhoneAddressRecord
 from phone_address_service.repositories.base import PhoneAddressRepository
 from phone_address_service.repositories.connection import get_redis_client
+from phone_address_service.config.logging import LoggingService
 
 logger = logging.getLogger(__name__)
+logging_service = LoggingService(__name__)
 
 
 class RedisPhoneAddressRepository(PhoneAddressRepository):
@@ -30,15 +32,17 @@ class RedisPhoneAddressRepository(PhoneAddressRepository):
         try:
             return await get_redis_client()
         except (ConnectionError, TimeoutError) as e:
-            logger.error(
+            logging_service.log_error(
                 "Redis connection error",
-                extra={"error": str(e), "operation": "get_client"}
+                e,
+                operation="get_client"
             )
             raise ConnectionError("Redis service unavailable") from e
         except Exception as e:
-            logger.error(
+            logging_service.log_error(
                 "Unexpected error getting Redis client",
-                extra={"error": str(e), "operation": "get_client"}
+                e,
+                operation="get_client"
             )
             raise
     

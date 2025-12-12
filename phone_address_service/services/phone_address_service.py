@@ -12,8 +12,10 @@ from phone_address_service.models.schemas import (
     UpdateAddressRequest
 )
 from phone_address_service.repositories.base import PhoneAddressRepository
+from phone_address_service.config.logging import LoggingService
 
 logger = logging.getLogger(__name__)
+logging_service = LoggingService(__name__)
 
 
 class PhoneAddressService:
@@ -45,38 +47,40 @@ class PhoneAddressService:
         try:
             PhoneAddressRecord(phone=phone, address="temp")
         except ValueError as e:
-            logger.warning(
+            logging_service.log_operation(
+                "warning",
                 "Invalid phone format in get request",
-                extra={"phone": phone, "error": str(e), "operation": "get_address"}
+                phone=phone,
+                operation="get_address",
+                error=str(e)
             )
             raise ValueError(f"Invalid phone format: {str(e)}") from e
         
         try:
             record = await self.repository.get(phone)
             
-            if record:
-                logger.info(
-                    "Address retrieved successfully",
-                    extra={"phone": phone, "operation": "get_address"}
-                )
-            else:
-                logger.info(
-                    "Phone number not found",
-                    extra={"phone": phone, "operation": "get_address"}
-                )
+            logging_service.log_crud_operation(
+                "read", 
+                phone, 
+                success=record is not None
+            )
             
             return record
             
-        except ConnectionError:
-            logger.error(
+        except ConnectionError as e:
+            logging_service.log_error(
                 "Redis unavailable during get operation",
-                extra={"phone": phone, "operation": "get_address"}
+                e,
+                phone=phone,
+                operation="get_address"
             )
             raise
         except Exception as e:
-            logger.error(
+            logging_service.log_error(
                 "Unexpected error during get operation",
-                extra={"phone": phone, "error": str(e), "operation": "get_address"}
+                e,
+                phone=phone,
+                operation="get_address"
             )
             raise
     
@@ -105,30 +109,37 @@ class PhoneAddressService:
             # Attempt to create in repository
             created_record = await self.repository.create(record)
             
-            logger.info(
-                "Phone address record created successfully",
-                extra={"phone": request.phone, "operation": "create_record"}
+            logging_service.log_crud_operation(
+                "create",
+                request.phone,
+                success=True
             )
             
             return created_record
             
         except ValueError as e:
             # This covers both validation errors and duplicate phone numbers
-            logger.warning(
-                "Failed to create record due to validation or duplicate",
-                extra={"phone": request.phone, "error": str(e), "operation": "create_record"}
+            logging_service.log_crud_operation(
+                "create",
+                request.phone,
+                success=False,
+                error=str(e)
             )
             raise
-        except ConnectionError:
-            logger.error(
+        except ConnectionError as e:
+            logging_service.log_error(
                 "Redis unavailable during create operation",
-                extra={"phone": request.phone, "operation": "create_record"}
+                e,
+                phone=request.phone,
+                operation="create_record"
             )
             raise
         except Exception as e:
-            logger.error(
+            logging_service.log_error(
                 "Unexpected error during create operation",
-                extra={"phone": request.phone, "error": str(e), "operation": "create_record"}
+                e,
+                phone=request.phone,
+                operation="create_record"
             )
             raise
     
@@ -150,9 +161,12 @@ class PhoneAddressService:
         try:
             PhoneAddressRecord(phone=phone, address="temp")
         except ValueError as e:
-            logger.warning(
+            logging_service.log_operation(
+                "warning",
                 "Invalid phone format in update request",
-                extra={"phone": phone, "error": str(e), "operation": "update_address"}
+                phone=phone,
+                operation="update_address",
+                error=str(e)
             )
             raise ValueError(f"Invalid phone format: {str(e)}") from e
         
@@ -160,29 +174,28 @@ class PhoneAddressService:
             # Update in repository
             updated_record = await self.repository.update(phone, request.address)
             
-            if updated_record:
-                logger.info(
-                    "Address updated successfully",
-                    extra={"phone": phone, "operation": "update_address"}
-                )
-            else:
-                logger.info(
-                    "Phone number not found for update",
-                    extra={"phone": phone, "operation": "update_address"}
-                )
+            logging_service.log_crud_operation(
+                "update",
+                phone,
+                success=updated_record is not None
+            )
             
             return updated_record
             
-        except ConnectionError:
-            logger.error(
+        except ConnectionError as e:
+            logging_service.log_error(
                 "Redis unavailable during update operation",
-                extra={"phone": phone, "operation": "update_address"}
+                e,
+                phone=phone,
+                operation="update_address"
             )
             raise
         except Exception as e:
-            logger.error(
+            logging_service.log_error(
                 "Unexpected error during update operation",
-                extra={"phone": phone, "error": str(e), "operation": "update_address"}
+                e,
+                phone=phone,
+                operation="update_address"
             )
             raise
     
@@ -203,9 +216,12 @@ class PhoneAddressService:
         try:
             PhoneAddressRecord(phone=phone, address="temp")
         except ValueError as e:
-            logger.warning(
+            logging_service.log_operation(
+                "warning",
                 "Invalid phone format in delete request",
-                extra={"phone": phone, "error": str(e), "operation": "delete_record"}
+                phone=phone,
+                operation="delete_record",
+                error=str(e)
             )
             raise ValueError(f"Invalid phone format: {str(e)}") from e
         
@@ -213,28 +229,27 @@ class PhoneAddressService:
             # Delete from repository
             deleted = await self.repository.delete(phone)
             
-            if deleted:
-                logger.info(
-                    "Record deleted successfully",
-                    extra={"phone": phone, "operation": "delete_record"}
-                )
-            else:
-                logger.info(
-                    "Phone number not found for deletion",
-                    extra={"phone": phone, "operation": "delete_record"}
-                )
+            logging_service.log_crud_operation(
+                "delete",
+                phone,
+                success=deleted
+            )
             
             return deleted
             
-        except ConnectionError:
-            logger.error(
+        except ConnectionError as e:
+            logging_service.log_error(
                 "Redis unavailable during delete operation",
-                extra={"phone": phone, "operation": "delete_record"}
+                e,
+                phone=phone,
+                operation="delete_record"
             )
             raise
         except Exception as e:
-            logger.error(
+            logging_service.log_error(
                 "Unexpected error during delete operation",
-                extra={"phone": phone, "error": str(e), "operation": "delete_record"}
+                e,
+                phone=phone,
+                operation="delete_record"
             )
             raise
