@@ -2,9 +2,11 @@
 
 import logging
 from typing import Callable
-from fastapi import Request, Response
+from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from redis.exceptions import ConnectionError, TimeoutError, RedisError
+from pydantic import ValidationError
 
 from phone_address_service.config.logging import (
     generate_correlation_id, 
@@ -109,3 +111,120 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         )
         
         return response
+
+
+class ErrorHandlingMiddleware(BaseHTTPMiddleware):
+    """Middleware for centralized error handling."""
+    
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Handle errors and return appropriate HTTP responses."""
+        try:
+            response = await call_next(request)
+            return response
+            
+        except HTTPException:
+            # Let FastAPI handle HTTPExceptions normally
+            raise
+            
+        except (ConnectionError, TimeoutError) as e:
+            # Redis connection errors
+            logging_service.log_error(
+                "Redis connection error",
+                e,
+                operation="error_handling",
+                path=str(request.url.path),
+                method=request.method
+            )
+            
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "Service Unavailable",
+                    "message": "Redis service unavailable"
+                }
+            )
+            
+        except RedisError as e:
+            # Other Redis errors
+            logging_service.log_error(
+                "Redis error",
+                e,
+                operation="error_handling",
+                path=str(request.url.path),
+                method=request.method
+            )
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Internal Server Error",
+                    "message": "Database error occurred"
+                }
+            )
+            
+        except ValidationError as e:
+            # Pydantic validation errors
+            logging_service.log_operation(
+                "warning",
+                "Validation error",
+                operation="error_handling",
+                path=str(request.url.path),
+                method=request.method,
+                error=str(e)
+            )
+            
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Bad Request",
+                    "message": "Invalid request data",
+                    "details": e.errors()
+                }
+            )
+            
+        except ValueError as e:
+            # Business logic validation errors
+            logging_service.log_operation(
+                "warning",
+                "Value error",
+                operation="error_handling",
+                path=str(request.url.path),
+                method=request.method,
+                error=str(e)
+            )
+            
+            # Check if it's a duplicate error (409) or validation error (400)
+            if "already exists" in str(e):
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": "Conflict",
+                        "message": str(e)
+                    }
+                )
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Bad Request",
+                        "message": str(e)
+                    }
+                )
+                
+        except Exception as e:
+            # Unexpected errors
+            logging_service.log_error(
+                "Unexpected error",
+                e,
+                operation="error_handling",
+                path=str(request.url.path),
+                method=request.method
+            )
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Internal Server Error",
+                    "message": "An unexpected error occurred"
+                }
+            )
